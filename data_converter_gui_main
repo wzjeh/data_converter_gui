@@ -1,0 +1,121 @@
+# An util to convert text to numpy array / LaTeX / pandas DataFrame
+# Created by 紫薯神 (Zishushen)
+# 2025-05-30
+
+import sys
+import os
+import re
+rootPath = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
+sys.path.append(rootPath)
+
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+
+class rootWindow(QMainWindow):
+    def __init__(self, *args, **kargs):
+        super().__init__(*args, **kargs)
+
+        self.setGeometry(100, 100, 1000, 800)
+        self.setWindowTitle("数据转换工具 (Original work by 交大有江, revised by 紫薯神)")
+        self.create_main_layout()
+
+    def create_main_layout(self):
+        self.org_text = QPlainTextEdit()
+        self.tgt_text = QTextEdit()
+        self.tgt_text.setReadOnly(True)
+
+        self.button_convert = QPushButton("转换numpy")
+        self.button_latex = QPushButton("转换LaTeX")
+        self.button_dataframe = QPushButton("转换DataFrame")
+        self.button_paste = QPushButton("复制结果")
+
+        self.button_convert.clicked.connect(self.convert_numpy)
+        self.button_latex.clicked.connect(self.convert_latex)
+        self.button_dataframe.clicked.connect(self.convert_dataframe)
+        self.button_paste.clicked.connect(self.paste)
+
+        boxb = QHBoxLayout()
+        boxb.addWidget(self.button_convert)
+        boxb.addWidget(self.button_latex)
+        boxb.addWidget(self.button_dataframe)
+        boxb.addWidget(self.button_paste)
+
+        boxt = QHBoxLayout()
+        boxt.addWidget(self.org_text)
+        boxt.addWidget(self.tgt_text)
+
+        form = QFormLayout()
+        form.addRow(boxb)
+        form.addRow(boxt)
+
+        w = QWidget()
+        w.setLayout(form)
+        self.setCentralWidget(w)
+
+    def convert_numpy(self):
+        text = self.org_text.toPlainText()
+        self.tgt_text.clear()
+        self.tgt_text.append("import numpy as np")
+        self.tgt_text.append("arr = np.array([")
+        for line in text.splitlines():
+            line = line.replace('\t', ' ').strip()
+            if line:
+                line = ', '.join(line.split())
+                res = '    [' + line + '],'
+                self.tgt_text.append(res)
+        self.tgt_text.append("])")
+
+    def convert_latex(self):
+        text = self.org_text.toPlainText()
+        self.tgt_text.clear()
+        for line in text.splitlines():
+            line = line.replace('\t', ' ').strip()
+            if line:
+                line = ' & '.join(line.split()) + r' \\'
+                self.tgt_text.append(line)
+
+    def convert_dataframe(self):
+        text = self.org_text.toPlainText()
+        self.tgt_text.clear()
+
+        lines = [line.strip().replace('\t', ' ') for line in text.splitlines() if line.strip()]
+        if not lines:
+            self.tgt_text.append("# 输入至少需要一行数据")
+            return
+
+        # 使用默认列名
+        headers = ["column1", "column2", "column3"]
+
+        # 所有行作为数据行，按分号（半角或全角）分隔
+        rows = [[col.strip() for col in re.split('[;；]', line) if col.strip()] for line in lines]
+
+        # 确保每行数据与列数一致，补齐或截断
+        processed_rows = []
+        for row in rows:
+            if len(row) < len(headers):
+                row.extend([""] * (len(headers) - len(row)))  # 补齐
+            elif len(row) > len(headers):
+                row = row[:len(headers)]  # 截断
+            processed_rows.append(row)
+
+        # 转置数据列
+        cols = list(zip(*processed_rows))
+
+        self.tgt_text.append("import pandas as pd")
+        self.tgt_text.append("df = pd.DataFrame(data = {")
+        for i, name in enumerate(headers):
+            values = [f'"{val}"' if val and not (val.isdigit() or (val.replace('.', '', 1).isdigit() and val.count('.') <= 1)) else val for val in cols[i]]
+            values_str = ', '.join(values)
+            self.tgt_text.append(f'    "{name}": [{values_str}],')
+        self.tgt_text.append("})")
+
+    def paste(self):
+        self.tgt_text.selectAll()
+        self.tgt_text.copy()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    ex = rootWindow()
+    ex.show()
+    app.exec()
